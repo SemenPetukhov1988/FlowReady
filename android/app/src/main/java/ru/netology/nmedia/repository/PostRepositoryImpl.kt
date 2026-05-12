@@ -26,38 +26,52 @@ class PostRepositoryImpl(private val dao: PostDao) : PostRepository {
         if (response.isSuccessful) {
             val serverPosts = response.body() ?: return
 
-            // 1. Получаем список всех ID, которые уже есть в нашей локальной базе
-            val existingPostIds = dao.getAllPostIds().toSet() // Используем Set для быстрого поиска
+            // Получаем список всех ID, которые уже есть в нашей локальной базе
+            val existingPostIds = dao.getAllPostIds().toSet()
 
-            // 2. Фильтруем посты с сервера: берем только те, которых еще нет в базе
+            // 1. Находим посты с сервера, которых еще нет у нас (это "новые данные")
             val newPostsFromServer = serverPosts.filter { !existingPostIds.contains(it.id) }
 
-            // 3. Если на сервере есть новые посты, которых нет у нас
-            if (newPostsFromServer.isNotEmpty()) {
-                // Находим самый большой ID среди этих новых постов
-                // Это будет наш "порог" для определения "новизны" для пользователя
-                val maxNewServerId = newPostsFromServer.maxOf { it.id }
+            // 2. Определяем "порог новизны" для пользователя.
+            // Это самый большой ID из тех постов, что УЖЕ были в базе.
+            // Если база была пуста (как при первом запуске), то lastLocalPostId будет 0 или null.
+            val lastLocalPostId = dao.getLastPostId()
 
-                // 4. Трансформируем ТОЛЬКО новые посты
-                val entitiesToInsert = newPostsFromServer.map { postDto ->
-                    // Для новых постов флаг будет зависеть от их ID
-                    val isPostNewForUser = postDto.id > maxNewServerId
 
-                    // Используем существующий fromDto и меняем флаг
-                    PostEntity.fromDto(postDto).copy(isNew = isPostNewForUser)
+            // Мы будем помечать как "новые" только если база была ПУСТАЯ.
+            // Это означает первый запуск приложения.
+            val isFirstLaunch = lastLocalPostId == 0L || existingPostIds.isEmpty()
+
+
+            // Если есть новые посты для загрузки ИЛИ это первый запуск (чтобы пометить все как новые)
+            if (newPostsFromServer.isNotEmpty() || isFirstLaunch) {
+
+                // Создаем список сущностей для вставки
+                val entitiesToInsert = if (isFirstLaunch) {
+                    // Если это первый запуск, помечаем ВСЕ пришедшие посты как новые
+                    serverPosts.map { PostEntity.fromDto(it).copy(isNew = true) }
+                } else {
+                    // Если это не первый запуск (обновление), помечаем только НОВЫЕ посты как "не новые"
+                    newPostsFromServer.map { PostEntity.fromDto(it).copy(isNew = false) }
                 }
 
-                // 5. Вставляем в базу ТОЛЬКО новые сущности
                 dao.insert(entitiesToInsert)
-            } else {
-                // Если новых постов нет, ничего не делаем.
-                // База остается в прежнем состоянии.
-            }
+
+                // --- ДОПОЛНИТЕЛЬНО: Обработка старых постов ---
+                // Если это не первый запуск, нам нужно проверить старые посты,
+                // которые стали "новыми" для пользователя (их ID больше старого порога)
+                if (!isFirstLaunch) {
+                    val oldPostsToMarkAsNew = existingPostIds.filter { it > lastLocalPostId }
+                    if (oldPostsToMarkAsNew.isNotEmpty()) {
+                        dao.updateIsNewByIds(oldPostsToMarkAsNew, true)
+                    }
+                }
+
+            } // Конец условия if
         } else {
             throw ApiError(response.code(), response.message())
         }
     }
-
     override suspend fun refreshPosts() {
 
             val response = PostsApi.service.getAll()
@@ -140,10 +154,31 @@ class PostRepositoryImpl(private val dao: PostDao) : PostRepository {
     }
 
     override suspend fun removeById(id: Long) {
-        TODO("Not yet implemented")
+
+        dao.removeById(id)
+
+        try {
+            val response = PostsApi.service.removeById(id)
+            if (!response.isSuccessful) {
+                throw ApiError(response.code(), response.message())
+            }
+        } catch (e: Exception) {
+            throw e
+        }
     }
 
     override suspend fun likeById(id: Long) {
-        TODO("Not yet implemented")
+        dao.likeById(id)
+        try {
+            val post = dao.getPostById(id)
+            if (post.likedByMe) {
+                PostsApi.service.likeById(id)
+            } else {
+                PostsApi.service.dislikeById(id)
+            }
+        } catch (e: Exception) {
+            dao.likeById(id)
+            throw e
+        }
     }
 }

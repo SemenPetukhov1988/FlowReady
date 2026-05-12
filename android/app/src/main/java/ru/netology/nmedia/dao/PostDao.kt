@@ -22,14 +22,27 @@ interface PostDao {
     @Query("SELECT COUNT(*) FROM PostEntity")
     suspend fun count(): Int
 
+    @Query("DELETE FROM PostEntity WHERE id = :id")
+    suspend fun removeById(id: Long)
+    @Query("SELECT * FROM PostEntity WHERE id = :id")
+    suspend fun getPostById(id: Long): PostEntity
+    @Query(
+        """
+        UPDATE PostEntity SET 
+            likes = likes + CASE WHEN likedByMe THEN -1 ELSE 1 END, 
+            likedByMe = CASE WHEN likedByMe THEN 0 ELSE 1 END 
+        WHERE id = :id
+        """
+    )
+    suspend fun likeById(id: Long)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(post: PostEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(posts: List<PostEntity>)
 
-    @Query("DELETE FROM PostEntity WHERE id = :id")
-    suspend fun removeById(id: Long)
+    @Query("UPDATE PostEntity SET isNew = :isNew WHERE id IN (:ids)")
+    suspend fun updateIsNewByIds(ids: List<Long>, isNew: Boolean)
 
     @Query("SELECT COUNT(*) FROM PostEntity WHERE id > :lastLocalPostId")
     suspend fun getNewPostsCount(lastLocalPostId: Long): Int
