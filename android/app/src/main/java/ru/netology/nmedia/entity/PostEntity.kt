@@ -14,6 +14,7 @@ data class PostEntity(
     val published: Long,
     val likedByMe: Boolean,
     val likes: Int = 0,
+    val isNew: Boolean = true,
 ) {
     fun toDto() = Post(id, author, authorAvatar, content, published, likedByMe, likes)
 
@@ -25,4 +26,7 @@ data class PostEntity(
 }
 
 fun List<PostEntity>.toDto(): List<Post> = map(PostEntity::toDto)
-fun List<Post>.toEntity(): List<PostEntity> = map(PostEntity::fromDto)
+fun List<Post>.toEntity(): List<PostEntity> = map {
+    // Используем существующий метод fromDto и сразу меняем флаг
+    PostEntity.fromDto(it).copy(isNew = false)
+}

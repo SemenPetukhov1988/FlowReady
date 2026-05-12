@@ -59,13 +59,40 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
 
     }
 
+    fun showAllPosts() {
+        viewModelScope.launch {
+            try {
+                // 1. Меняем флаги в базе данных
+                repository.markAllOldPostsAsNew()
+
+                // 2. КОСТЫЛЬ: Ждем, пока база обновится и UI отрисует изменения
+                delay(150L)
+
+                // 3. Отправляем сигнал на скролл
+                _scrollToTop.postValue(Unit)
+
+            } catch (e: Exception) {
+                // Обработка ошибки остается прежней
+                e.printStackTrace()
+            }
+        }
+
+}
     fun loadPosts() = viewModelScope.launch {
         try {
             _dataState.value = FeedModelState(loading = true)
-            repository.getAll()
+            repository.fetchAndSaveInitialPosts()
             _dataState.value = FeedModelState()
-            delay(100L)
-            _scrollToTop.postValue(Unit)
+
+            // --- ПРОСТОЙ КОСТЫЛЬ ---
+            // Ждем полторы секунды (1500 миллисекунд),
+            // чтобы RecyclerView точно успел все отрисовать.
+            delay(1500L)
+
+            // Теперь отправляем сигнал на скролл
+            _scrollToTop.value = Unit
+            // ---------------------
+
         } catch (e: Exception) {
             _dataState.value = FeedModelState(error = true)
         }
@@ -74,7 +101,7 @@ class PostViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshPosts() = viewModelScope.launch {
         try {
             _dataState.value = FeedModelState(refreshing = true)
-            repository.getAll()
+            repository.refreshPosts()
             _dataState.value = FeedModelState()
             delay(100L)
             _scrollToTop.value = Unit

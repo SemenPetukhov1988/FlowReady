@@ -5,6 +5,10 @@ import ru.netology.nmedia.dto.Post
 
 interface PostRepository {
     val data: Flow<List<Post>>
+    suspend fun fetchAndSaveInitialPosts()
+
+    suspend fun refreshPosts()
+    suspend fun markAllOldPostsAsNew()
     suspend fun getAll()
     fun getNewerCount(id: Long): Flow<Int>
     suspend fun save(post: Post)

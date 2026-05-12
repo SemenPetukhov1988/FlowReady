@@ -9,12 +9,16 @@ import ru.netology.nmedia.entity.PostEntity
 
 @Dao
 interface PostDao {
-    @Query("SELECT * FROM PostEntity ORDER BY id DESC")
+    @Query("SELECT * FROM PostEntity WHERE isNew = 1 ORDER BY id DESC")
     fun getAll(): Flow<List<PostEntity>>
-
+    @Query("SELECT MAX(id) FROM PostEntity")
+    suspend fun getLastPostId(): Long
+    @Query("UPDATE PostEntity SET isNew = 1 WHERE isNew = 0")
+    suspend fun markAllOldPostsAsNew()
     @Query("SELECT COUNT(*) == 0 FROM PostEntity")
     suspend fun isEmpty(): Boolean
-
+    @Query("SELECT id FROM PostEntity")
+    suspend fun getAllPostIds(): List<Long>
     @Query("SELECT COUNT(*) FROM PostEntity")
     suspend fun count(): Int
 

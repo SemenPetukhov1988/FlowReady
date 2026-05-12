@@ -92,10 +92,10 @@ class FeedFragment : Fragment() {
         }
         binding.newPost.setOnClickListener {
             // 1. Плавный скролл к самому верху RecyclerView
-
+            viewModel.showAllPosts()
             // 2. Прячем плашку после скролла
             binding.newPost.isVisible = false
-            viewModel.refreshPosts()
+
         }
 
         binding.fab.setOnClickListener {
